@@ -29,8 +29,20 @@ async def health(state=Depends(get_app_state)):
     """
     Health check endpoint. Returns service status and metadata.
     """
+    status = "ok"
+    try:
+        # Verify vector store is accessible
+        from main import rag_engine
+        if rag_engine is not None:
+            store_size = state.get("vector_store_size", 0)
+        else:
+            store_size = 0
+            status = "degraded"
+    except Exception:
+        status = "degraded"
+
     return HealthResponse(
-        status="ok",
+        status=status,
         version=state.get("version", "0.2.0"),
         vector_store_size=state.get("vector_store_size", 0),
         embedding_model=state.get("embedding_model", ""),
