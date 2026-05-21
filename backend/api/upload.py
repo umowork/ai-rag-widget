@@ -9,7 +9,11 @@ import os
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+
+from main import limiter
+
+from backend.api.auth import require_api_key
 
 from models.schemas import UploadResponse
 
@@ -56,12 +60,15 @@ def _validate_file(file: UploadFile) -> None:
 
 
 @router.post("/text", response_model=UploadResponse)
+@limiter.limit("30/minute")
 async def upload_text(
+    request: Request,
     text: str = Form(..., min_length=1, max_length=100000),
     source: str = Form("manual"),
     chunk_size: int = Form(500),
     chunk_overlap: int = Form(50),
     engine=Depends(get_engine),
+    _key: None = Depends(require_api_key),
 ):
     """
     Upload raw text as a document.
@@ -81,13 +88,16 @@ async def upload_text(
         )
     except Exception as e:
         logger.exception("Text upload error")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/file", response_model=UploadResponse)
+@limiter.limit("30/minute")
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
     engine=Depends(get_engine),
+    _key: None = Depends(require_api_key),
 ):
     """
     Upload a document file (PDF, DOCX, TXT, MD).
@@ -128,14 +138,17 @@ async def upload_file(
         )
     except Exception as e:
         logger.exception("File upload error")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # Backward-compat: POST /upload/pdf → POST /upload/file
 @router.post("/pdf", response_model=UploadResponse)
+@limiter.limit("30/minute")
 async def upload_pdf(
+    request: Request,
     file: UploadFile = File(...),
     engine=Depends(get_engine),
+    _key: None = Depends(require_api_key),
 ):
     """Legacy: upload PDF file (delegates to /upload/file)."""
-    return await upload_file(file=file, engine=engine)
+    return await upload_file(request=request, file=file, engine=engine)

@@ -18,9 +18,23 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+
+
+def _rate_limit_exceeded_handler(request, exc):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please try again later."},
+    )
 
 # Import config first — it has no heavy deps
 from config import Config
@@ -30,7 +44,7 @@ from logging_config import setup_logging
 # ─── Global State ───────────────────────────────────────────────────
 
 app_state = {
-    "version": "0.2.0",
+    "version": "1.0.0",
     "vector_store_size": 0,
     "embedding_model": "",
     "llm_provider": "",
@@ -77,6 +91,9 @@ def create_app(config: Config) -> FastAPI:
         redoc_url=None,
         lifespan=lifespan,
     )
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_middleware(SlowAPIMiddleware)
 
     # ── CORS ───────────────────────────────────────────────────────
     origins = [o.strip() for o in config.cors_origins.split(",")]
@@ -164,6 +181,7 @@ def create_app(config: Config) -> FastAPI:
     )
 
     # ── Update app state ───────────────────────────────────────────
+    app_state["version"] = config.version
     app_state["vector_store_size"] = vector_store.count()
     app_state["embedding_model"] = embedding_service.model_name
     app_state["llm_provider"] = llm_service.model_name

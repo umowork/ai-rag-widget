@@ -28,14 +28,16 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Copy installed packages from builder
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
+COPY --from=builder /root/.local /home/appuser/.local
+ENV PATH=/home/appuser/.local/bin:$PATH
 
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p chroma_db uploads
+# Create necessary directories and set ownership
+RUN mkdir -p chroma_db uploads && \
+    useradd --create-home appuser && \
+    chown -R appuser:appuser /app /home/appuser
 
 # Set PYTHONPATH so backend modules resolve
 ENV PYTHONPATH=/app/backend
@@ -47,7 +49,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD python3 -c "import httpx; httpx.get('http://localhost:8000/health', timeout=5)" || exit 1
 
-RUN useradd --create-home appuser
 USER appuser
 
 # Run with uvicorn

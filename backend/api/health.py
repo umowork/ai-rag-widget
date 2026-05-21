@@ -30,21 +30,29 @@ async def health(state=Depends(get_app_state)):
     Health check endpoint. Returns service status and metadata.
     """
     status = "ok"
+    store_size = 0
+
     try:
-        # Verify vector store is accessible
+        # Verify vector store is accessible by querying ChromaDB
         from main import rag_engine
-        if rag_engine is not None:
-            store_size = state.get("vector_store_size", 0)
+        if rag_engine is not None and hasattr(rag_engine, "vector_store"):
+            vs = rag_engine.vector_store
+            try:
+                store_size = vs.count()
+            except Exception as exc:
+                logger.warning("ChromaDB connectivity check failed: %s", exc)
+                status = "degraded"
         else:
             store_size = 0
             status = "degraded"
-    except Exception:
+    except Exception as exc:
+        logger.warning("Health check: unable to access RAG engine: %s", exc)
         status = "degraded"
 
     return HealthResponse(
         status=status,
-        version=state.get("version", "0.2.0"),
-        vector_store_size=state.get("vector_store_size", 0),
+        version=state.get("version", "1.0.0"),
+        vector_store_size=store_size,
         embedding_model=state.get("embedding_model", ""),
         llm_provider=state.get("llm_provider", ""),
         mock_mode=state.get("mock_mode", False),

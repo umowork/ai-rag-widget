@@ -50,6 +50,8 @@ class Config:
     port: int = 8000
     cors_origins: str = "*"
 
+    version: str = "1.0.0"
+
     # ─── Uploads ───────────────────────────────────────────────────
     upload_dir: str = "./uploads"
     max_upload_size_mb: int = 50
@@ -95,6 +97,8 @@ class Config:
             host=os.getenv("HOST", "0.0.0.0"),
             port=int(os.getenv("PORT", "8000")),
             cors_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000"),
+            # Version
+            version=os.getenv("APP_VERSION", "1.0.0"),
             # Uploads
             upload_dir=os.getenv("UPLOAD_DIR", "./uploads"),
             max_upload_size_mb=int(os.getenv("MAX_UPLOAD_SIZE_MB", "50")),

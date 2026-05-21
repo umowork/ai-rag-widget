@@ -9,8 +9,12 @@ import time
 from typing import AsyncGenerator
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+
+from main import limiter
+
+from backend.api.auth import require_api_key
 
 from models.schemas import (
     QueryRequest,
@@ -36,10 +40,13 @@ def get_cache():
 
 
 @router.post("", response_model=QueryResponse)
+@limiter.limit("30/minute")
 async def chat(
+    fastapi_request: Request,
     request: QueryRequest,
     engine=Depends(get_engine),
     cache=Depends(get_cache),
+    _key: None = Depends(require_api_key),
 ):
     """
     Synchronous chat: retrieve context + generate LLM answer.
@@ -57,7 +64,7 @@ async def chat(
         )
     except Exception as e:
         logger.error("Chat error for query", query=request.query[:50], error=str(e))
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
     elapsed = (time.time() - start_time) * 1000
 
@@ -114,11 +121,14 @@ async def _stream_response(
 
 
 @router.get("/stream")
+@limiter.limit("30/minute")
 async def chat_stream(
+    fastapi_request: Request,
     query: str = Query(..., min_length=1, max_length=4096),
     top_k: int = Query(default=4, ge=1, le=20),
     engine=Depends(get_engine),
     cache=Depends(get_cache),
+    _key: None = Depends(require_api_key),
 ):
     """
     Streaming chat endpoint (SSE).
@@ -137,11 +147,14 @@ async def chat_stream(
 
 # Backward-compatible GET /chat (non-streaming)
 @router.get("")
+@limiter.limit("30/minute")
 async def chat_get(
+    fastapi_request: Request,
     query: str = Query(..., min_length=1, max_length=4096),
     top_k: int = Query(default=4, ge=1, le=20),
     engine=Depends(get_engine),
     cache=Depends(get_cache),
+    _key: None = Depends(require_api_key),
 ):
     """
     GET /chat — legacy endpoint, delegates to POST /chat logic.

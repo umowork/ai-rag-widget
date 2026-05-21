@@ -72,4 +72,7 @@ docker-compose.override.yml
 
 
 
+# ChromaDB binary data
+chroma_db/
+
 # dev
